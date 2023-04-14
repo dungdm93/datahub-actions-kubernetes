@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datahub-executor-kubernetes"
+authors = [
+    { name = "Dũng Đặng Minh", email = "dungdm93@live.com" },
+]
+description = "Execute Datahub ingestion on Kubernetes"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["datahub", "kubernetes"]
+license = { text = "Apache 2.0" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "kubernetes-asyncio>=24.0",
+]
+dynamic = ["version"]
