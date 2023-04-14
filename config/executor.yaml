@@ -1,0 +1,34 @@
+name: ingestion_executor
+source:
+  type: kafka
+  config:
+    connection:
+      bootstrap: localhost:9092
+      schema_registry_url: http://localhost:8081
+    topic_routes:
+      mcl: MetadataChangeLog_Versioned_v1
+      pe: PlatformEvent_v1
+filter:
+  event_type: MetadataChangeLogEvent_v1
+  event:
+    entityType: dataHubExecutionRequest
+    changeType: UPSERT
+    aspectName:
+      - dataHubExecutionRequestInput
+      - dataHubExecutionRequestSignal
+    aspect:
+      value:
+        executorId: default
+action:
+  type: executor
+  config:
+    executor_id: default
+    task_configs:
+      - name: RUN_INGEST
+        type: datahub_kubernetes.executor.execution.kubernetes_pod_ingestion_task.KubernetesPodIngestionTask
+        configs:
+          image_template: hub.teko.vn/dataops/datahub/ingestion:0.10.1
+          k8s_config:
+            namespace: default
+datahub:
+  server: http://localhost:8080
