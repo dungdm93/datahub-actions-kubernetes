@@ -1,6 +1,7 @@
 import logging
 from collections import deque
-from typing import Tuple
+from os import getenv
+from typing import Tuple, List
 
 import yaml
 from acryl.executor.common.config import ConfigModel, PermissiveConfigModel
@@ -8,7 +9,18 @@ from acryl.executor.context.execution_context import ExecutionContext
 from acryl.executor.context.executor_context import ExecutorContext
 from acryl.executor.execution.sub_process_task_common import SubProcessTaskUtil
 from acryl.executor.execution.task import Task
+from datahub.cli.cli_utils import (
+    ENV_SKIP_CONFIG,
+    ENV_METADATA_HOST_URL,
+    ENV_METADATA_HOST,
+    ENV_METADATA_PORT,
+    ENV_METADATA_PROTOCOL,
+    ENV_METADATA_TOKEN,
+    ENV_DATAHUB_SYSTEM_CLIENT_ID,
+    ENV_DATAHUB_SYSTEM_CLIENT_SECRET,
+)
 from kubernetes_asyncio import config as kube
+from kubernetes_asyncio.client import V1EnvVar
 from kubernetes_asyncio.client.api import CoreV1Api
 from kubernetes_asyncio.client.api_client import ApiClient as K8sApiClient
 from kubernetes_asyncio.client.models import (
@@ -71,6 +83,26 @@ class KubernetesPodIngestionTask(Task):
             )
         return K8sApiClient()
 
+    @staticmethod
+    def update_ingest_container_env(container: V1Container, env_name: str):
+        env_value = getenv(env_name)
+        if env_value is None:
+            return
+
+        if not container.env:
+            container.env = list()
+        env: List[V1EnvVar] = container.env
+
+        for e in env:
+            if e.name == env_name:
+                e.value = env_value
+                return
+
+        env.append(V1EnvVar(
+            name=env_name,
+            value=env_value
+        ))
+
     def build_k8s_objects(self,
                           args: KubernetesPodIngestionTaskArgs,
                           ctx: ExecutionContext,
@@ -108,6 +140,18 @@ class KubernetesPodIngestionTask(Task):
             spec.containers.append(ingest_c)
         ingest_c.image = self.config.image_template.format(version=args.version, type=recipe["source"]["type"])
         ingest_c.args = ["datahub", "ingest", "run", "-c", "/etc/datahub/recipe.yaml"]
+
+        # See: datahub.ingestion.run.pipeline_config.PipelineConfig.default_sink_is_datahub_rest
+        #       -> get_url_and_token
+        #       -> datahub.cli.cli_utils.get_details_from_env
+        self.update_ingest_container_env(ingest_c, ENV_SKIP_CONFIG)
+        self.update_ingest_container_env(ingest_c, ENV_METADATA_HOST_URL)
+        self.update_ingest_container_env(ingest_c, ENV_METADATA_HOST)
+        self.update_ingest_container_env(ingest_c, ENV_METADATA_PORT)
+        self.update_ingest_container_env(ingest_c, ENV_METADATA_PROTOCOL)
+        self.update_ingest_container_env(ingest_c, ENV_METADATA_TOKEN)
+        self.update_ingest_container_env(ingest_c, ENV_DATAHUB_SYSTEM_CLIENT_ID)
+        self.update_ingest_container_env(ingest_c, ENV_DATAHUB_SYSTEM_CLIENT_SECRET)
 
         secret = V1Secret(
             api_version="v1",
