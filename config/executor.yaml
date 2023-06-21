@@ -3,11 +3,11 @@ source:
   type: kafka
   config:
     connection:
-      bootstrap: localhost:9092
-      schema_registry_url: http://localhost:8081
+      bootstrap: ${KAFKA_BOOTSTRAP_SERVER:-localhost:9092}
+      schema_registry_url: ${SCHEMA_REGISTRY_URL:-http://localhost:8081}
     topic_routes:
-      mcl: MetadataChangeLog_Versioned_v1
-      pe: PlatformEvent_v1
+      mcl: ${METADATA_CHANGE_LOG_VERSIONED_TOPIC_NAME:-MetadataChangeLog_Versioned_v1}
+      pe: ${PLATFORM_EVENT_TOPIC_NAME:-PlatformEvent_v1}
 filter:
   event_type: MetadataChangeLogEvent_v1
   event:
@@ -18,7 +18,7 @@ filter:
       - dataHubExecutionRequestSignal
     aspect:
       value:
-        executorId: default
+        executorId: ${EXECUTOR_ID:-default}
 action:
   type: executor
   config:
@@ -27,8 +27,12 @@ action:
       - name: RUN_INGEST
         type: datahub_kubernetes.executor.execution.kubernetes_pod_ingestion_task.KubernetesPodIngestionTask
         configs:
-          image_template: hub.teko.vn/dataops/datahub/ingestion:0.10.1
+          image_template: ${DATAHUB_INGESTION_IMAGE_TEMPLATE}
           k8s_config:
-            namespace: default
+            in_cluster: ${KUBERNETES_IN_CLUSTER:-false}
+            config_file: ${KUBERNETES_CONFIG_FILE:-null}
+            namespace: ${KUBERNETES_NAMESPACE:-default}
 datahub:
-  server: http://localhost:8080
+  server: "${DATAHUB_GMS_PROTOCOL:-http}://${DATAHUB_GMS_HOST:-localhost}:${DATAHUB_GMS_PORT:-8080}"
+  extra_headers:
+    Authorization: "Basic ${DATAHUB_SYSTEM_CLIENT_ID:-__datahub_system}:${DATAHUB_SYSTEM_CLIENT_SECRET:-JohnSnowKnowsNothing}"
