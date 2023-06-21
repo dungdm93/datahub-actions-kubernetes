@@ -139,7 +139,7 @@ class KubernetesPodIngestionTask(Task):
             ingest_c = V1Container(name="datahub-ingest")
             spec.containers.append(ingest_c)
         ingest_c.image = self.config.image_template.format(version=args.version, type=recipe["source"]["type"])
-        ingest_c.args = ["datahub", "ingest", "run", "-c", "/etc/datahub/recipe.yaml"]
+        ingest_c.args = ["datahub", "ingest", "run", "--no-default-report", "-c", "/etc/datahub/recipe.yaml"]
 
         # See: datahub.ingestion.run.pipeline_config.PipelineConfig.default_sink_is_datahub_rest
         #       -> get_url_and_token
