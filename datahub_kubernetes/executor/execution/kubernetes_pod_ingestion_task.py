@@ -1,4 +1,5 @@
 import logging
+import time
 from collections import deque
 from os import getenv
 from typing import Tuple, List
@@ -213,7 +214,6 @@ class KubernetesPodIngestionTask(Task):
         k8s_client = await self.k8s_client()
         core_api = CoreV1Api(k8s_client)
         logs_deque: deque[str] = deque(maxlen=self.config.max_log_lines)
-        logs_truncated = False
 
         try:
             await core_api.create_namespaced_secret(namespace, secret)
@@ -231,15 +231,17 @@ class KubernetesPodIngestionTask(Task):
                     continue
 
                 # Pod is running
+                last_stream_log_time = time.time()
                 async for line in read_pod_logs(core_api, p, tail_lines=100):
                     logs_deque.append(line)
-                    while len(logs_deque) > SubProcessTaskUtil.MAX_LOG_LINES:
-                        logs_deque.popleft()
-                        logs_truncated = True
+                    if time.time() < last_stream_log_time + 3:
+                        continue
+
                     logs = "\n".join(logs_deque)
-                    if logs_truncated:
+                    if len(logs_deque) >= self.config.max_log_lines:
                         logs = "[earlier logs truncated...]\n" + logs
                     ctx.request.progress_callback(logs)
+                    last_stream_log_time = time.time()
 
             ctx.get_report().report_info("Successfully executed 'datahub ingest'")
         except Exception as e:  # noqa
@@ -247,7 +249,7 @@ class KubernetesPodIngestionTask(Task):
             raise
         finally:
             logs = "\n".join(logs_deque)
-            if logs_truncated:
+            if len(logs_deque) >= self.config.max_log_lines:
                 logs = "[earlier logs truncated...]\n" + logs
             ctx.get_report().set_logs(logs)
             if validated_args.debug_mode.lower() == "false":  # not in DEBUG mode
